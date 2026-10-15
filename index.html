@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#141210">
+<title>Photo Sweeper</title>
+<style>
+/* Layout: one-screen darkroom. A photo card fills the stage; verdict buttons under it; thin progress strip on top; trash drawer slides up. */
+:root{
+  --bg:#141210; --surface:#1f1b18; --fg:#f1ece3; --muted:#9a9184;
+  --keep:#3cc985; --trash:#ff6a52; --line:#312b26; --accent:#f1ece3;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Heebo",Arial,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);display:flex;flex-direction:column;overflow:hidden;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+  padding-left:max(14px,env(safe-area-inset-left,0px));padding-right:max(14px,env(safe-area-inset-right,0px))}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-block:10px 4px}
+h1{font-size:1.05rem;font-weight:900;margin:0}
+.count{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.85rem}
+.bar{height:3px;background:var(--line);border-radius:2px;margin-block:6px 10px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .25s}
+select{font:inherit;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:999px;padding:6px 10px;max-width:46vw}
+
+.stage{flex:1;min-height:0;position:relative}
+.card{position:absolute;inset:0;background:var(--surface);border-radius:18px;overflow:hidden;
+  box-shadow:0 14px 40px rgba(0,0,0,.4);display:flex;flex-direction:column;touch-action:none;user-select:none;-webkit-user-select:none;will-change:transform}
+.card img{flex:1;min-height:0;width:100%;object-fit:contain;background:#000;pointer-events:none;-webkit-user-drag:none}
+.card .meta{padding:8px 12px;font-size:.78rem;color:var(--muted);border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums}
+.card .meta span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card.anim{transition:transform .28s ease,opacity .28s ease}
+.stamp{position:absolute;top:18px;padding:5px 14px;border:3px solid;border-radius:8px;font-weight:900;font-size:1.3rem;opacity:0;pointer-events:none;background:rgba(0,0,0,.55)}
+.stamp.keep{right:18px;color:var(--keep);border-color:var(--keep);transform:rotate(12deg)}
+.stamp.trash{left:18px;color:var(--trash);border-color:var(--trash);transform:rotate(-12deg)}
+
+.actions{display:flex;gap:14px;justify-content:center;align-items:center;padding-block:14px 6px}
+button{font-family:inherit;font-weight:700;border:0;border-radius:999px;cursor:pointer;font-size:1rem;color:var(--fg)}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+button:disabled{opacity:.4}
+.big{width:70px;height:70px;font-size:1.9rem;color:#fff;box-shadow:0 8px 20px rgba(0,0,0,.35)}
+.big.trash{background:var(--trash)} .big.keep{background:var(--keep)}
+.small{width:50px;height:50px;background:var(--surface);border:1px solid var(--line);font-size:1.15rem}
+.trashbtn{position:relative}
+.badge{position:absolute;top:-4px;left:-4px;background:var(--trash);color:#fff;font-size:.7rem;min-width:20px;height:20px;border-radius:10px;display:grid;place-items:center;padding:0 5px;font-variant-numeric:tabular-nums}
+
+.panel{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center}
+.panel p{max-width:32ch;color:var(--muted);margin:0;line-height:1.6}
+.pick{background:var(--accent);color:var(--bg);padding:14px 28px;font-size:1.05rem}
+.stat{font-size:2.2rem;font-weight:900;font-variant-numeric:tabular-nums}
+.stat small{display:block;font-size:.8rem;color:var(--muted);font-weight:500}
+
+.drawer{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-radius:20px 20px 0 0;transform:translateY(105%);transition:transform .3s;
+  padding:16px max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));max-height:80%;display:flex;flex-direction:column;gap:12px;box-shadow:0 -10px 40px rgba(0,0,0,.5)}
+.drawer.open{transform:none}
+.drawer h2{margin:0;font-size:1rem;display:flex;justify-content:space-between;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;overflow:auto;min-height:0}
+.grid div{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;background:#000}
+.grid img{width:100%;height:100%;object-fit:cover}
+.grid button{position:absolute;top:4px;left:4px;width:24px;height:24px;font-size:.8rem;background:rgba(0,0,0,.7);padding:0}
+.row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.row button{padding:12px 18px;background:var(--bg);border:1px solid var(--line)}
+.row .danger{background:var(--trash);color:#fff;border:0}
+.toast{position:fixed;bottom:calc(90px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--accent);color:var(--bg);padding:8px 16px;border-radius:999px;font-size:.9rem;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9;white-space:nowrap}
+.toast.show{opacity:1}
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .3s}
+.scrim.show{opacity:1;pointer-events:auto}
+@media (prefers-reduced-motion:reduce){.card.anim,.bar i,.toast,.drawer{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Photo Sweeper</h1>
+  <select id="bucket" hidden><option value="">כל התמונות</option></select>
+  <span class="count" id="count"></span>
+</header>
+<div class="bar"><i id="prog"></i></div>
+
+<section class="panel" id="start">
+  <div class="stat" id="freedStat"><span id="freed">0 MB</span><small>שוחררו עד היום</small></div>
+  <p>האפליקציה עוברת על הגלריה תמונה-תמונה. החלקה ימינה שומרת, שמאלה מעבירה לפח. הפח מתרוקן רק כשאתה מאשר.</p>
+  <button class="pick" id="startBtn">התחל לנקות</button>
+  <input type="file" id="files" accept="image/*" multiple hidden>
+  <p id="webNote" hidden style="font-size:.8rem">מצב דפדפן: מחיקה אמיתית עובדת רק באפליקציה המותקנת.</p>
+</section>
+
+<section class="stage" id="stage" hidden></section>
+<div class="actions" id="actions" hidden>
+  <button class="big trash" id="btnTrash" aria-label="לפח">✕</button>
+  <button class="small" id="btnUndo" aria-label="בטל">↶</button>
+  <button class="small trashbtn" id="btnOpenTrash" aria-label="פח"><span>🗑</span><span class="badge" id="badge" hidden>0</span></button>
+  <button class="big keep" id="btnKeep" aria-label="שמור">✓</button>
+</div>
+
+<section class="panel" id="done" hidden>
+  <div class="stat"><span id="doneN">0</span><small>תמונות נסקרו בסבב הזה</small></div>
+  <p id="doneMsg"></p>
+  <div class="row"><button id="doneTrash" class="danger">רוקן את הפח</button><button id="doneAgain">סבב חדש</button></div>
+</section>
+
+<div class="scrim" id="scrim"></div>
+<div class="drawer" id="drawer">
+  <h2><span>פח · <span id="trashN">0</span> תמונות · <span id="trashMB">0 MB</span></span><button class="small" id="closeDrawer" style="width:36px;height:36px">✕</button></h2>
+  <div class="grid" id="trashGrid"></div>
+  <div class="row"><button class="danger" id="emptyBtn">מחק מהטלפון</button><button id="restoreAll">החזר הכל</button></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const Cap=window.Capacitor, native=!!(Cap&&Cap.isNativePlatform&&Cap.isNativePlatform());
+// Call the native plugin through Capacitor's built-in bridge (no bundler needed).
+const Gallery=native? new Proxy({}, {get:(_,method)=>opts=>Cap.nativePromise('Gallery',method,opts||{})}) : null;
+window.addEventListener('error',e=>{ try{ toast('שגיאה: '+e.message); }catch{} });
+const PAGE=60;
+let queue=[], trash=[], history=[], total=0, offset=0, loading=false, bucket='', reviewed=0;
+const stage=$('stage');
+
+// ---------- persistence (per-device conveniences) ----------
+const store={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+let freedBytes=store.get('freedBytes',0);
+$('freed').textContent=fmt(freedBytes);
+
+// ---------- source: native gallery or browser files ----------
+async function loadMore(){
+  if(loading) return; loading=true;
+  try{
+    if(native){
+      const r=await Gallery.listPhotos({offset,limit:PAGE,bucket});
+      total=r.total; offset+=r.items.length;
+      const seen=new Set([...queue,...trash].map(i=>i.id));
+      r.items.filter(i=>!seen.has(i.id)).forEach(i=>queue.push({...i,src:Cap.convertFileSrc(i.uri)}));
+    }
+  }catch(e){ toast('שגיאה בטעינה: '+(e.message||e)); }
+  loading=false;
+}
+async function start(){
+  if(native){
+    let p=await Gallery.checkAccess();
+    if(!p.granted) p=await Gallery.requestAccess();
+    if(!p.granted){ toast('בלי גישה לגלריה אין מה לנקות'); return; }
+    queue=[]; offset=0; reviewed=0;
+    await loadBuckets(); await loadMore();
+    if(!queue.length){ toast('לא נמצאו תמונות'); return; }
+    show('stage'); render();
+  } else { $('files').click(); }
+}
+async function loadBuckets(){
+  try{
+    const r=await Gallery.listBuckets(); const sel=$('bucket');
+    sel.innerHTML='<option value="">כל התמונות</option>'+r.buckets.map(b=>`<option value="${esc(b.name)}">${esc(b.name||'(ללא אלבום)')} · ${b.count}</option>`).join('');
+    sel.value=bucket; sel.hidden=false;
+  }catch{}
+}
+$('bucket').onchange=async e=>{ bucket=e.target.value; queue=[]; offset=0; reviewed=0; await loadMore(); render(); };
+$('files').onchange=e=>{
+  const list=[...e.target.files].filter(f=>f.type.startsWith('image/')); if(!list.length) return;
+  queue=list.map((f,i)=>({id:'w'+i+'-'+f.name,name:f.name,size:f.size,dateAdded:f.lastModified,src:URL.createObjectURL(f)}));
+  total=queue.length; reviewed=0; show('stage'); render();
+};
+if(!native) $('webNote').hidden=false;
+$('startBtn').onclick=start;
+
+// ---------- rendering ----------
+function show(w){ $('start').hidden=w!=='start'; stage.hidden=$('actions').hidden=w!=='stage'; $('done').hidden=w!=='done'; }
+function render(){
+  const done=reviewed, all=native? total : done+queue.length;
+  $('count').textContent=all? `${done} / ${all}`:'';
+  $('prog').style.width=all? (done/all*100)+'%':'0';
+  $('badge').hidden=!trash.length; $('badge').textContent=trash.length;
+  if(!queue.length){ if(native && offset<total){ loadMore().then(render); return; } finish(); return; }
+  if(native && queue.length<10 && offset<total) loadMore();
+  stage.innerHTML='';
+  if(queue[1]) stage.appendChild(card(queue[1],false));
+  stage.appendChild(card(queue[0],true));
+}
+function card(it,top){
+  const c=document.createElement('div'); c.className='card';
+  const date=it.dateTaken||it.dateAdded; const d=date? new Date(date).toLocaleDateString('he-IL'):'';
+  c.innerHTML=`<img src="${it.src}" alt="" loading="eager"><div class="meta"><span>${esc(it.name||'')}</span><span>${fmt(it.size)} · ${d}</span></div>
+    <span class="stamp keep">שמור</span><span class="stamp trash">לפח</span>`;
+  if(!top){ c.style.transform='scale(.95) translateY(10px)'; c.style.opacity='.55'; return c; }
+  let sx=0,sy=0,dx=0,drag=false;
+  const sk=c.querySelector('.stamp.keep'), st=c.querySelector('.stamp.trash');
+  c.onpointerdown=e=>{drag=true;sx=e.clientX;sy=e.clientY;c.setPointerCapture(e.pointerId);c.classList.remove('anim')};
+  c.onpointermove=e=>{ if(!drag)return; dx=e.clientX-sx; const dy=(e.clientY-sy)*.3;
+    c.style.transform=`translate(${dx}px,${dy}px) rotate(${dx/18}deg)`;
+    sk.style.opacity=clamp(dx/80); st.style.opacity=clamp(-dx/80); };
+  c.onpointerup=c.onpointercancel=()=>{ if(!drag)return; drag=false;
+    const th=Math.min(110,window.innerWidth*.28);
+    if(dx>th) decide('keep'); else if(dx<-th) decide('trash');
+    else { c.classList.add('anim'); c.style.transform=''; sk.style.opacity=st.style.opacity=0; } dx=0; };
+  return c;
+}
+function decide(v){
+  const it=queue.shift(); if(!it) return;
+  reviewed++; history.push({it,v}); if(v==='trash') trash.push(it);
+  if(navigator.vibrate) navigator.vibrate(v==='trash'?25:10);
+  const top=stage.lastElementChild;
+  if(top){ top.classList.add('anim'); top.style.transform=`translateX(${v==='keep'?'130%':'-130%'}) rotate(${v==='keep'?22:-22}deg)`; top.style.opacity='0'; }
+  setTimeout(render,230);
+}
+function undo(){ const h=history.pop(); if(!h){toast('אין מה לבטל');return;}
+  reviewed--; queue.unshift(h.it); if(h.v==='trash') trash=trash.filter(t=>t!==h.it); show('stage'); render(); }
+$('btnKeep').onclick=()=>decide('keep'); $('btnTrash').onclick=()=>decide('trash'); $('btnUndo').onclick=undo;
+document.addEventListener('keydown',e=>{ if(stage.hidden)return;
+  if(e.key==='ArrowRight')decide('keep'); else if(e.key==='ArrowLeft')decide('trash'); else if(e.key==='Backspace'||e.key==='z')undo(); });
+
+function finish(){
+  show('done'); $('doneN').textContent=reviewed;
+  $('doneMsg').textContent=trash.length? `${trash.length} תמונות בפח (${fmt(sum(trash))}). הן עדיין בטלפון עד שתאשר.` : 'הפח ריק. הגלריה נקייה.';
+  $('doneTrash').hidden=!trash.length;
+}
+$('doneAgain').onclick=()=>{ history=[]; show('start'); };
+$('doneTrash').onclick=openDrawer;
+
+// ---------- trash drawer ----------
+function openDrawer(){ renderTrash(); $('drawer').classList.add('open'); $('scrim').classList.add('show'); }
+function closeDrawer(){ $('drawer').classList.remove('open'); $('scrim').classList.remove('show'); }
+$('btnOpenTrash').onclick=openDrawer; $('closeDrawer').onclick=closeDrawer; $('scrim').onclick=closeDrawer;
+function renderTrash(){
+  $('trashN').textContent=trash.length; $('trashMB').textContent=fmt(sum(trash));
+  $('trashGrid').innerHTML=trash.map((t,i)=>`<div><img src="${t.src}" alt="" loading="lazy"><button data-i="${i}" aria-label="החזר">↶</button></div>`).join('');
+  $('trashGrid').querySelectorAll('button').forEach(b=>b.onclick=()=>{ const t=trash.splice(+b.dataset.i,1)[0]; queue.unshift(t); reviewed--; renderTrash(); if(!stage.hidden) render(); });
+  $('emptyBtn').disabled=!trash.length;
+}
+$('restoreAll').onclick=()=>{ trash.forEach(t=>queue.unshift(t)); reviewed-=trash.length; trash=[]; renderTrash(); closeDrawer(); show('stage'); render(); };
+$('emptyBtn').onclick=async()=>{
+  if(!trash.length) return;
+  if(!native){ toast('בדפדפן אי אפשר למחוק קבצים מהמכשיר'); return; }
+  $('emptyBtn').disabled=true;
+  try{
+    const bytes=sum(trash);
+    const r=await Gallery.deletePhotos({ids:trash.map(t=>t.id)});
+    if(r.confirmed===false){ toast('המחיקה בוטלה'); }
+    else { freedBytes+=bytes; store.set('freedBytes',freedBytes); $('freed').textContent=fmt(freedBytes);
+      toast(`נמחקו ${trash.length} תמונות · ${fmt(bytes)}`); trash=[]; history=[]; }
+  }catch(e){ toast('המחיקה נכשלה: '+(e.message||e)); }
+  renderTrash(); closeDrawer();
+  if(!$('done').hidden) finish(); else render();
+};
+
+// ---------- helpers ----------
+function sum(a){return a.reduce((s,i)=>s+(i.size||0),0)}
+function clamp(x){return Math.min(1,Math.max(0,x))}
+function fmt(b){ return b>=1e9? (b/1e9).toFixed(2)+' GB' : b>=1e6? (b/1e6).toFixed(1)+' MB' : Math.round(b/1e3)+' KB'; }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1800); }
+</script>
+</body>
+</html>
