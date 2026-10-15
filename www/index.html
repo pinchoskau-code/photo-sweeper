@@ -111,7 +111,9 @@ button:disabled{opacity:.4}
 <script>
 const $=id=>document.getElementById(id);
 const Cap=window.Capacitor, native=!!(Cap&&Cap.isNativePlatform&&Cap.isNativePlatform());
-const Gallery=native? Cap.registerPlugin('Gallery') : null;
+// Call the native plugin through Capacitor's built-in bridge (no bundler needed).
+const Gallery=native? new Proxy({}, {get:(_,method)=>opts=>Cap.nativePromise('Gallery',method,opts||{})}) : null;
+window.addEventListener('error',e=>{ try{ toast('שגיאה: '+e.message); }catch{} });
 const PAGE=60;
 let queue=[], trash=[], history=[], total=0, offset=0, loading=false, bucket='', reviewed=0;
 const stage=$('stage');
