@@ -60,8 +60,8 @@ select{font:inherit;font-size:.85rem;background:rgba(0,0,0,.45);color:#fff;borde
 .series .head b{display:block;font-size:1.1rem;font-weight:900}
 .series .head span{color:var(--muted);font-size:.8rem}
 .series .grid{flex:1;min-height:0;overflow:auto;display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:0 4px calc(var(--sab) + 130px)}
-.series .grid div{position:relative;aspect-ratio:3/4;overflow:hidden;border-radius:10px;background:#000;touch-action:pan-y}
-.series .grid img{width:100%;height:100%;object-fit:cover;pointer-events:none;-webkit-user-drag:none}
+.series .grid div{position:relative;aspect-ratio:1;overflow:hidden;border-radius:10px;background:#161412;touch-action:pan-y}
+.series .grid img{width:100%;height:100%;object-fit:contain;pointer-events:none;-webkit-user-drag:none}
 .series .grid .chk{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,.4);display:grid;place-items:center;font-size:.95rem;color:#fff;font-weight:900}
 .series .grid div.on{outline:3px solid var(--keep);outline-offset:-3px}
 .series .grid div.on .chk{background:var(--keep);border-color:var(--keep)}
@@ -78,9 +78,16 @@ select{font:inherit;font-size:.85rem;background:rgba(0,0,0,.45);color:#fff;borde
 .actions.series-mode .big{width:auto;height:52px;padding:0 16px;font-size:.9rem;border-radius:999px}
 .actions.series-mode .mid{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3);height:52px;padding:0 16px;font-size:.9rem;backdrop-filter:blur(6px)}
 
-/* preview on long press */
-.preview{position:fixed;inset:0;background:#000;z-index:20;display:grid;place-items:center}
-.preview img{max-width:100%;max-height:100%;object-fit:contain}
+/* series viewer */
+.viewer{position:fixed;inset:0;background:#000;z-index:20;display:flex;flex-direction:column}
+.viewer .strip{flex:1;min-height:0;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.viewer .strip::-webkit-scrollbar{display:none}
+.viewer .strip div{flex:0 0 100%;scroll-snap-align:center;display:grid;place-items:center}
+.viewer .strip img{max-width:100%;max-height:100%;object-fit:contain}
+.viewer .vtop{position:absolute;top:0;left:0;right:0;padding:calc(var(--sat) + 10px) 14px 10px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(rgba(0,0,0,.6),rgba(0,0,0,0));z-index:2}
+.viewer .vbot{padding:14px 16px calc(var(--sab) + 16px);display:flex;justify-content:center;background:#000}
+.viewer .vbot button{height:54px;padding:0 24px;font-size:1rem;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3)}
+.viewer .vbot button.on{background:var(--keep);border-color:var(--keep);color:#fff}
 
 /* trash drawer */
 .drawer{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-radius:20px 20px 0 0;transform:translateY(105%);transition:transform .3s;
@@ -155,7 +162,11 @@ select{font:inherit;font-size:.85rem;background:rgba(0,0,0,.45);color:#fff;borde
   <div class="row"><button id="doneTrash" class="pick danger">העבר לפח המערכת</button><button id="doneAgain" class="ghost">למסך הראשי</button></div>
 </section>
 
-<div class="preview" id="preview" hidden><img id="previewImg" alt=""></div>
+<div class="viewer" id="viewer" hidden>
+  <div class="vtop"><button class="iconbtn" id="vClose" aria-label="סגור">✕</button><span class="count" id="vCount"></span></div>
+  <div class="strip" id="vStrip"></div>
+  <div class="vbot"><button id="vKeep">✓ שמור את התמונה הזו</button></div>
+</div>
 <div class="scrim" id="scrim"></div>
 <div class="drawer" id="drawer">
   <h2><span>הפח</span><button class="small" id="closeDrawer" style="width:36px;height:36px">✕</button></h2>
@@ -178,6 +189,12 @@ const PAGE=80, SERIES_GAP=60*1000, FRESH_DAYS=3;
 let raw=[], queue=[], trash=[], history=[], total=0, offset=0, loading=false, bucket='', reviewed=0;
 let mode='gallery', phase=1, phaseTotal=0, caps={systemTrash:false};
 const stage=$('stage');
+const thumbs={}; // id -> data url
+async function loadThumbs(items){
+  if(!native) { items.forEach(i=>thumbs[i.id]=thumbs[i.id]||i.src); return; }
+  const need=items.filter(i=>!thumbs[i.id]).map(i=>i.id); if(!need.length) return;
+  try{ const r=await Gallery.thumbnails({ids:need,size:360}); Object.assign(thumbs,r.thumbs||{}); }catch{}
+}
 
 // ---------- persistent memory (on-device) ----------
 const store={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
@@ -271,6 +288,7 @@ function render(){
   const pn=Object.keys(pending).length; $('badge').hidden=!pn; $('badge').textContent=pn;
   if(!queue.length){ if(hasMore()){ loadMore().then(render); return; } finish(); return; }
   if(hasMore() && queue.length<6) loadMore();
+  queue.slice(0,4).filter(e=>e.type==='series').forEach(e=>loadThumbs(e.items));
   stage.innerHTML='';
   if(queue[1]) stage.appendChild(card(queue[1],false));
   stage.appendChild(card(queue[0],true));
@@ -285,15 +303,15 @@ function card(entry,top){
   } else {
     const g=entry.items, d=new Date(g[0].t).toLocaleString('he-IL',{dateStyle:'short',timeStyle:'short'});
     c.className='card series';
-    c.innerHTML=`<div class="head"><b>סדרה של ${g.length} תמונות</b><span>${d} · ${fmt(sum(g))} · הקש לסימון שמירה, לחיצה ארוכה להגדלה</span></div>
-      <div class="grid">${g.map((it,i)=>`<div data-i="${i}"><img src="${it.src}" alt="" loading="lazy"><span class="chk"></span></div>`).join('')}</div>
+    c.innerHTML=`<div class="head"><b>סדרה של ${g.length} תמונות</b><span>${d} · ${fmt(sum(g))} · הקש על תמונה לצפייה ולבחירה</span></div>
+      <div class="grid">${g.map((it,i)=>`<div data-i="${i}" class="${entry.sel.has(it)?'on':''}"><img src="${thumbs[it.id]||''}" alt=""><span class="chk">${entry.sel.has(it)?'✓':''}</span></div>`).join('')}</div>
       <span class="stamp keep">שמור הכל</span><span class="stamp trash">מחק הכל</span>`;
+    loadThumbs(g).then(()=>{ c.querySelectorAll('.grid div').forEach(tile=>{ const im=tile.querySelector('img'), t=thumbs[g[+tile.dataset.i].id]; if(t&&im.src!==t) im.src=t; }); });
     if(top) c.querySelectorAll('.grid div').forEach(tile=>{
-      let timer=null, moved=false, sx=0, sy=0;
-      tile.onpointerdown=e=>{ moved=false; sx=e.clientX; sy=e.clientY; timer=setTimeout(()=>{ timer=null; openPreview(g[+tile.dataset.i].src); },380); };
-      tile.onpointermove=e=>{ if(Math.hypot(e.clientX-sx,e.clientY-sy)>10){ moved=true; clearTimeout(timer); timer=null; } };
-      tile.onpointerup=tile.onpointercancel=()=>{ if(timer){ clearTimeout(timer); timer=null; if(!moved){ const it=g[+tile.dataset.i]; entry.sel.has(it)? entry.sel.delete(it): entry.sel.add(it);
-          tile.classList.toggle('on'); tile.querySelector('.chk').textContent=entry.sel.has(it)?'✓':''; updateSeriesButtons(); } } closePreview(); };
+      let moved=false, sx=0, sy=0;
+      tile.onpointerdown=e=>{ moved=false; sx=e.clientX; sy=e.clientY; };
+      tile.onpointermove=e=>{ if(Math.hypot(e.clientX-sx,e.clientY-sy)>10) moved=true; };
+      tile.onpointerup=()=>{ if(!moved) openViewer(entry,+tile.dataset.i); };
     });
   }
   if(!top){ c.classList.add('under'); return c; }
@@ -311,9 +329,20 @@ function card(entry,top){
   return c;
 }
 function updateSeriesButtons(){ const e=queue[0]; if(!e||e.type!=='series') return; const n=e.sel.size; $('sKeepSel').textContent=n? `שמור ${n} מסומנות`:'שמור מסומנות'; $('sKeepSel').disabled=!n; }
-function openPreview(src){ $('previewImg').src=src; $('preview').hidden=false; }
-function closePreview(){ $('preview').hidden=true; }
-$('preview').onpointerup=closePreview;
+// ---------- series viewer ----------
+let vEntry=null, vIdx=0;
+function openViewer(entry,idx){
+  vEntry=entry; vIdx=idx; const g=entry.items;
+  $('vStrip').innerHTML=g.map(it=>`<div><img src="${it.src}" alt="" loading="lazy"></div>`).join('');
+  $('viewer').hidden=false;
+  const strip=$('vStrip'); strip.scrollLeft=0; requestAnimationFrame(()=>{ strip.children[idx]?.scrollIntoView({inline:'center',block:'nearest'}); updateViewer(); });
+  strip.onscroll=()=>{ clearTimeout(strip._t); strip._t=setTimeout(()=>{ const w=strip.clientWidth; vIdx=Math.round(Math.abs(strip.scrollLeft)/w); updateViewer(); },60); };
+}
+function updateViewer(){ if(!vEntry) return; const g=vEntry.items; vIdx=Math.max(0,Math.min(g.length-1,vIdx)); const on=vEntry.sel.has(g[vIdx]);
+  $('vCount').textContent=`${vIdx+1} / ${g.length}`; $('vKeep').textContent=on? '✓ מסומנת לשמירה' : 'שמור את התמונה הזו'; $('vKeep').classList.toggle('on',on); }
+$('vKeep').onclick=()=>{ if(!vEntry) return; const it=vEntry.items[vIdx]; vEntry.sel.has(it)? vEntry.sel.delete(it) : vEntry.sel.add(it); updateViewer(); };
+function closeViewer(){ $('viewer').hidden=true; const e=vEntry; vEntry=null; if(e===queue[0]) render(); }
+$('vClose').onclick=closeViewer;
 
 // ---------- decisions ----------
 function decide(v, selection){
@@ -356,13 +385,15 @@ function ask(msg){ return new Promise(res=>{ $('confirmMsg').textContent=msg; $(
 async function renderTrash(){
   const ids=Object.keys(pending);
   $('trashN').textContent=ids.length; $('trashMB').textContent=fmt(pendingBytes());
-  $('trashGrid').innerHTML=ids.map(id=>`<div><img src="${native? Cap.convertFileSrc(pending[id].uri): (raw.find(r=>r.id===id)||{}).src||''}" alt="" loading="lazy"><button data-id="${id}" aria-label="החזר">↶</button></div>`).join('')||'<div style="aspect-ratio:auto;background:none;color:var(--muted);font-size:.85rem;grid-column:1/-1">הפח ריק</div>';
+  await loadThumbs(ids.map(id=>({id,src:(raw.find(r=>r.id===id)||{}).src||''})));
+  $('trashGrid').innerHTML=ids.map(id=>`<div><img src="${thumbs[id]||''}" alt="" loading="lazy"><button data-id="${id}" aria-label="החזר">↶</button></div>`).join('')||'<div style="aspect-ratio:auto;background:none;color:var(--muted);font-size:.85rem;grid-column:1/-1">הפח ריק</div>';
   $('trashGrid').querySelectorAll('button').forEach(b=>b.onclick=async()=>{ if(!await ask('להחזיר את התמונה לגלריה?')) return; restoreOne(b.dataset.id); renderTrash(); });
   $('emptyBtn').disabled=!ids.length; $('restoreAll').disabled=!ids.length;
   // system trash
   if(native && caps.systemTrash){
     try{ const r=await Gallery.listPhotos({trashed:true,limit:500}); $('sysH').hidden=$('sysGrid').hidden=false; $('sysN').textContent=r.total;
-      $('sysGrid').innerHTML=r.items.map(it=>{ const days=it.expires? Math.max(0,Math.ceil((it.expires-Date.now())/864e5)):''; return `<div><img src="${Cap.convertFileSrc(it.uri)}" alt="" loading="lazy"><button data-id="${it.id}" aria-label="שחזר">↶</button><span class="exp">${days!==''? days+' ימים':''}</span></div>`; }).join('')||'<div style="aspect-ratio:auto;background:none;color:var(--muted);font-size:.85rem;grid-column:1/-1">פח המערכת ריק</div>';
+      await loadThumbs(r.items);
+      $('sysGrid').innerHTML=r.items.map(it=>{ const days=it.expires? Math.max(0,Math.ceil((it.expires-Date.now())/864e5)):''; return `<div><img src="${thumbs[it.id]||''}" alt="" loading="lazy"><button data-id="${it.id}" aria-label="שחזר">↶</button><span class="exp">${days!==''? days+' ימים':''}</span></div>`; }).join('')||'<div style="aspect-ratio:auto;background:none;color:var(--muted);font-size:.85rem;grid-column:1/-1">פח המערכת ריק</div>';
       $('sysGrid').querySelectorAll('button').forEach(b=>b.onclick=async()=>{ if(!await ask('לשחזר את התמונה מפח המערכת לגלריה?')) return;
         try{ const res=await Gallery.restorePhotos({ids:[b.dataset.id]}); if(res.confirmed!==false){ toast('שוחזרה לגלריה'); delete kept[b.dataset.id]; saveKept(); } }catch(e){ toast('השחזור נכשל: '+(e.message||e)); } renderTrash(); });
     }catch(e){ $('sysH').hidden=$('sysGrid').hidden=true; }

@@ -200,6 +200,34 @@ public class GalleryPlugin extends Plugin {
         JSObject r = new JSObject(); r.put("buckets", arr); call.resolve(r);
     }
 
+    /** thumbnails({ ids, size? }) -> { thumbs: { id: "data:image/jpeg;base64,..." } } */
+    @PluginMethod
+    public void thumbnails(PluginCall call) {
+        JSArray ids = call.getArray("ids");
+        int size = call.getInt("size", 360);
+        if (ids == null) { call.reject("NO_IDS"); return; }
+        ContentResolver cr = getContext().getContentResolver();
+        JSObject thumbs = new JSObject();
+        for (int i = 0; i < ids.length(); i++) {
+            try {
+                long id = Long.parseLong(ids.getString(i));
+                Uri uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
+                android.graphics.Bitmap bmp;
+                if (Build.VERSION.SDK_INT >= 29) {
+                    bmp = cr.loadThumbnail(uri, new android.util.Size(size, size), null);
+                } else {
+                    bmp = MediaStore.Images.Thumbnails.getThumbnail(cr, id, MediaStore.Images.Thumbnails.MINI_KIND, null);
+                }
+                if (bmp == null) continue;
+                java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 72, out);
+                bmp.recycle();
+                thumbs.put(String.valueOf(id), "data:image/jpeg;base64," + android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP));
+            } catch (Exception ignored) {}
+        }
+        JSObject r = new JSObject(); r.put("thumbs", thumbs); call.resolve(r);
+    }
+
     /** capabilities() -> { systemTrash: bool } */
     @PluginMethod
     public void capabilities(PluginCall call) {
