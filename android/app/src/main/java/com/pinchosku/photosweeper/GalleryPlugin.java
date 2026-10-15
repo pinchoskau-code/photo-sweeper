@@ -110,18 +110,41 @@ public class GalleryPlugin extends Plugin {
             MediaStore.Images.Media.WIDTH,
             MediaStore.Images.Media.HEIGHT,
             MediaStore.Images.Media.BUCKET_DISPLAY_NAME,
-            MediaStore.Images.Media.MIME_TYPE
+            MediaStore.Images.Media.MIME_TYPE,
+            Build.VERSION.SDK_INT >= 30 ? MediaStore.Images.Media.DATE_EXPIRES : MediaStore.Images.Media.MIME_TYPE
         };
-        String sel = null; String[] args = null;
-        if (bucket != null && !bucket.isEmpty()) {
-            sel = MediaStore.Images.Media.BUCKET_DISPLAY_NAME + " = ?";
-            args = new String[]{ bucket };
+        List<String> conds = new ArrayList<>(); List<String> argl = new ArrayList<>();
+        if (bucket != null && !bucket.isEmpty()) { conds.add(MediaStore.Images.Media.BUCKET_DISPLAY_NAME + " = ?"); argl.add(bucket); }
+        Long minAdded = call.getLong("minAdded"); // ms
+        Long maxAdded = call.getLong("maxAdded"); // ms
+        if (minAdded != null) { conds.add(MediaStore.Images.Media.DATE_ADDED + " >= ?"); argl.add(String.valueOf(minAdded / 1000L)); }
+        if (maxAdded != null) { conds.add(MediaStore.Images.Media.DATE_ADDED + " < ?"); argl.add(String.valueOf(maxAdded / 1000L)); }
+        JSArray onlyIds = call.getArray("ids");
+        if (onlyIds != null && onlyIds.length() > 0) {
+            StringBuilder in = new StringBuilder();
+            try { for (int i = 0; i < onlyIds.length(); i++) { if (i > 0) in.append(","); in.append(Long.parseLong(onlyIds.getString(i))); } }
+            catch (Exception e) { call.reject("BAD_IDS"); return; }
+            conds.add(MediaStore.Images.Media._ID + " IN (" + in + ")");
         }
+        boolean trashed = Boolean.TRUE.equals(call.getBoolean("trashed", false));
+        String sel = conds.isEmpty() ? null : android.text.TextUtils.join(" AND ", conds);
+        String[] args = argl.isEmpty() ? null : argl.toArray(new String[0]);
         String order = MediaStore.Images.Media.DATE_ADDED + " DESC";
 
         JSArray items = new JSArray();
         int total = 0;
-        try (Cursor c = cr.query(collection, proj, sel, args, order)) {
+        Cursor c0;
+        if (Build.VERSION.SDK_INT >= 30) {
+            android.os.Bundle q = new android.os.Bundle();
+            if (sel != null) q.putString(ContentResolver.QUERY_ARG_SQL_SELECTION, sel);
+            if (args != null) q.putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, args);
+            q.putString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER, order);
+            q.putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, trashed ? MediaStore.MATCH_ONLY : MediaStore.MATCH_EXCLUDE);
+            c0 = cr.query(collection, proj, q, null);
+        } else {
+            c0 = cr.query(collection, proj, sel, args, order);
+        }
+        try (Cursor c = c0) {
             if (c != null) {
                 total = c.getCount();
                 if (c.moveToPosition(offset)) {
@@ -140,6 +163,7 @@ public class GalleryPlugin extends Plugin {
                         o.put("height", c.getInt(6));
                         o.put("bucket", c.getString(7));
                         o.put("mime", c.getString(8));
+                        if (Build.VERSION.SDK_INT >= 30) o.put("expires", c.getLong(9) * 1000L);
                         items.put(o);
                         n++;
                     } while (n < limit && c.moveToNext());
@@ -174,6 +198,34 @@ public class GalleryPlugin extends Plugin {
             JSObject o = new JSObject(); o.put("name", e.getKey()); o.put("count", e.getValue()); arr.put(o);
         }
         JSObject r = new JSObject(); r.put("buckets", arr); call.resolve(r);
+    }
+
+    /** capabilities() -> { systemTrash: bool } */
+    @PluginMethod
+    public void capabilities(PluginCall call) {
+        JSObject r = new JSObject(); r.put("systemTrash", Build.VERSION.SDK_INT >= 30); r.put("sdk", Build.VERSION.SDK_INT); call.resolve(r);
+    }
+
+    /** trashPhotos({ ids }) -> moves to the system trash (Android 11+), one confirmation for the batch. */
+    @PluginMethod
+    public void trashPhotos(PluginCall call) { trashOrRestore(call, true); }
+
+    /** restorePhotos({ ids }) -> restores from the system trash (Android 11+). */
+    @PluginMethod
+    public void restorePhotos(PluginCall call) { trashOrRestore(call, false); }
+
+    private void trashOrRestore(PluginCall call, boolean toTrash) {
+        if (Build.VERSION.SDK_INT < 30) { if (toTrash) { deletePhotos(call); } else { call.reject("UNSUPPORTED"); } return; }
+        JSArray ids = call.getArray("ids");
+        if (ids == null || ids.length() == 0) { call.reject("NO_IDS"); return; }
+        List<Uri> uris = new ArrayList<>();
+        try {
+            for (int i = 0; i < ids.length(); i++)
+                uris.add(ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, Long.parseLong(ids.getString(i))));
+        } catch (JSONException e) { call.reject("BAD_IDS"); return; }
+        PendingIntent pi = MediaStore.createTrashRequest(getContext().getContentResolver(), uris, toTrash);
+        call.setKeepAlive(true);
+        startIntentSenderForResult(call, pi.getIntentSender(), "deleteResult");
     }
 
     /** deletePhotos({ ids: ["123", ...] }) -> { deleted: n } */

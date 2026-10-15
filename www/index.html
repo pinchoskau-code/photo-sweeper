@@ -98,15 +98,31 @@ select{font:inherit;font-size:.85rem;background:rgba(0,0,0,.45);color:#fff;borde
 .toast{position:fixed;bottom:calc(var(--sab) + 130px);left:50%;transform:translateX(-50%);z-index:40;background:var(--accent);color:var(--bg);padding:8px 16px;border-radius:999px;font-size:.9rem;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis}
 .toast.show{opacity:1}
 @media (prefers-reduced-motion:reduce){.card.anim,.bar i,.toast,.drawer{transition:none}}
+.iconbtn{width:40px;height:40px;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.25);font-size:1.1rem;backdrop-filter:blur(6px)}
+.topgroup{display:flex;gap:8px;align-items:center}
+.drawer h3{margin:8px 0 4px;font-size:.85rem;color:var(--muted);font-weight:500}
+.drawer .grid .exp{position:absolute;bottom:0;left:0;right:0;font-size:.65rem;text-align:center;background:rgba(0,0,0,.6);padding:2px}
+.confirm{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:rgba(0,0,0,.6);padding:24px}
+.confirm div{background:var(--surface);border-radius:16px;padding:20px;max-width:360px;width:100%;text-align:center;display:flex;flex-direction:column;gap:14px}
+.confirm p{margin:0;line-height:1.5}
+.confirm .row button{padding:12px 20px;background:var(--bg);border:1px solid var(--line)}
+.confirm .row .danger{background:var(--trash);color:#fff;border:0}
+.confirm .row .ok{background:var(--keep);color:#fff;border:0}
+.panel .sub{display:flex;gap:18px;justify-content:center;flex-wrap:wrap}
+.panel .sub .stat{font-size:1.4rem}
 </style>
 </head>
 <body>
-
 <section class="panel" id="start">
   <h1>Photo Sweeper</h1>
-  <div class="stat"><span id="freed">0 MB</span><small>שוחררו עד היום</small></div>
-  <p>החלקה ימינה שומרת, שמאלה מעבירה לפח. תמונות שצולמו באותה דקה מוצגות יחד כסדרה. הפח מתרוקן רק כשאתה מאשר.</p>
+  <div class="sub">
+    <div class="stat"><span id="freed">0 MB</span><small>שוחררו עד היום</small></div>
+    <div class="stat"><span id="keptN">0</span><small>שמורות</small></div>
+    <div class="stat"><span id="pendN">0</span><small>ממתינות לפח</small></div>
+  </div>
+  <p id="startMsg">החלקה ימינה שומרת, שמאלה לפח. מה ששמרת לא יעלה שוב. תמונות מ-3 הימים האחרונים מחכות בסוף התור.</p>
   <button class="pick" id="startBtn">התחל לנקות</button>
+  <div class="row"><button class="ghost" id="vaultBtn">עבור על השמורות</button><button class="ghost" id="trashBtn0">פתח את הפח</button></div>
   <input type="file" id="files" accept="image/*" multiple hidden>
   <p id="webNote" hidden style="font-size:.8rem">מצב דפדפן: מחיקה אמיתית עובדת רק באפליקציה המותקנת.</p>
 </section>
@@ -114,7 +130,11 @@ select{font:inherit;font-size:.85rem;background:rgba(0,0,0,.45);color:#fff;borde
 <section class="stage" id="stage" hidden></section>
 <div class="bar" id="barWrap" hidden><i id="prog"></i></div>
 <div class="top" id="top" hidden>
-  <select id="bucket" hidden><option value="">כל התמונות</option></select>
+  <div class="topgroup">
+    <button class="iconbtn" id="homeBtn" aria-label="חזרה">⌂</button>
+    <button class="iconbtn" id="vaultIcon" aria-label="שמורות">★</button>
+    <select id="bucket" hidden><option value="">כל התמונות</option></select>
+  </div>
   <span class="count" id="count"></span>
 </div>
 <div class="actions" id="actions" hidden>
@@ -132,16 +152,20 @@ select{font:inherit;font-size:.85rem;background:rgba(0,0,0,.45);color:#fff;borde
 <section class="panel" id="done" hidden>
   <div class="stat"><span id="doneN">0</span><small>תמונות נסקרו בסבב הזה</small></div>
   <p id="doneMsg"></p>
-  <div class="row"><button id="doneTrash" class="pick danger">רוקן את הפח</button><button id="doneAgain" class="ghost">סבב חדש</button></div>
+  <div class="row"><button id="doneTrash" class="pick danger">העבר לפח המערכת</button><button id="doneAgain" class="ghost">למסך הראשי</button></div>
 </section>
 
 <div class="preview" id="preview" hidden><img id="previewImg" alt=""></div>
 <div class="scrim" id="scrim"></div>
 <div class="drawer" id="drawer">
-  <h2><span>פח · <span id="trashN">0</span> תמונות · <span id="trashMB">0 MB</span></span><button class="small" id="closeDrawer" style="width:36px;height:36px">✕</button></h2>
+  <h2><span>הפח</span><button class="small" id="closeDrawer" style="width:36px;height:36px">✕</button></h2>
+  <h3 id="pendH">ממתינות · <span id="trashN">0</span> · <span id="trashMB">0 MB</span></h3>
   <div class="grid" id="trashGrid"></div>
-  <div class="row"><button class="danger" id="emptyBtn">מחק מהטלפון</button><button id="restoreAll">החזר הכל</button></div>
+  <div class="row" id="pendRow"><button class="danger" id="emptyBtn">העבר לפח המערכת</button><button id="restoreAll">החזר הכל לגלריה</button></div>
+  <h3 id="sysH" hidden>בפח המערכת · <span id="sysN">0</span> · נמחקות לבד אחרי 30 יום</h3>
+  <div class="grid" id="sysGrid" hidden></div>
 </div>
+<div class="confirm" id="confirm" hidden><div><p id="confirmMsg"></p><div class="row"><button class="ok" id="confirmYes">כן</button><button id="confirmNo">ביטול</button></div></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -150,133 +174,143 @@ const Cap=window.Capacitor, native=!!(Cap&&Cap.isNativePlatform&&Cap.isNativePla
 // Call the native plugin through Capacitor's built-in bridge (no bundler needed).
 const Gallery=native? new Proxy({}, {get:(_,method)=>opts=>Cap.nativePromise('Gallery',method,opts||{})}) : null;
 window.addEventListener('error',e=>{ try{ toast('שגיאה: '+e.message); }catch{} });
-const PAGE=80, SERIES_GAP=60*1000; // photos within 60s of each other form a series
+const PAGE=80, SERIES_GAP=60*1000, FRESH_DAYS=3;
 let raw=[], queue=[], trash=[], history=[], total=0, offset=0, loading=false, bucket='', reviewed=0;
+let mode='gallery', phase=1, phaseTotal=0, caps={systemTrash:false};
 const stage=$('stage');
 
+// ---------- persistent memory (on-device) ----------
 const store={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
 let freedBytes=store.get('freedBytes',0);
-$('freed').textContent=fmt(freedBytes);
+let kept=store.get('kept',{});        // id -> timestamp kept
+let pending=store.get('pending',{});  // id -> {t,size,name,src?}  photos swiped left, not yet in system trash
+const saveKept=()=>store.set('kept',kept), savePending=()=>store.set('pending',pending);
+function refreshHome(){ $('freed').textContent=fmt(freedBytes); $('keptN').textContent=Object.keys(kept).length; $('pendN').textContent=Object.keys(pending).length; }
+refreshHome();
 
 // ---------- loading ----------
+function freshCut(){ return Date.now()-FRESH_DAYS*864e5; }
+async function fetchPage(opts){ const r=await Gallery.listPhotos({limit:PAGE,...opts}); return r; }
+function ingest(items){
+  const seen=new Set(raw.map(i=>i.id));
+  items.filter(i=>!seen.has(i.id)&&!kept[i.id]&&!pending[i.id]).forEach(i=>raw.push({...i,src:Cap.convertFileSrc(i.uri),t:i.dateTaken||i.dateAdded}));
+}
 async function loadMore(){
-  if(loading||!native) return; loading=true;
+  if(loading||!native||mode!=='gallery') return; loading=true;
   try{
-    const r=await Gallery.listPhotos({offset,limit:PAGE,bucket});
-    total=r.total; offset+=r.items.length;
-    const seen=new Set(raw.map(i=>i.id));
-    r.items.filter(i=>!seen.has(i.id)).forEach(i=>{ const it={...i,src:Cap.convertFileSrc(i.uri),t:i.dateTaken||i.dateAdded}; raw.push(it); });
+    // phase 1: photos older than FRESH_DAYS (newest first); phase 2: the fresh ones, last.
+    let r=await fetchPage(phase===1? {offset,bucket,maxAdded:freshCut()} : {offset,bucket,minAdded:freshCut()});
+    if(phase===1 && offset===0){ total=r.total; }
+    phaseTotal=r.total; offset+=r.items.length; ingest(r.items);
+    if(phase===1 && offset>=phaseTotal){ phase=2; offset=0; const r2=await fetchPage({offset,bucket,minAdded:freshCut()}); total+=r2.total; phaseTotal=r2.total; offset+=r2.items.length; ingest(r2.items); }
     rebuildQueue();
   }catch(e){ toast('שגיאה בטעינה: '+(e.message||e)); }
   loading=false;
 }
-// Group consecutive photos (already newest-first) taken within SERIES_GAP in the same album.
+function hasMore(){ return native && mode==='gallery' && (phase===1 || offset<phaseTotal); }
 function rebuildQueue(){
-  const pending=raw.filter(i=>i.verdict==null);
-  const out=[]; let i=0;
-  while(i<pending.length){
-    const g=[pending[i]]; let j=i+1;
-    while(j<pending.length && pending[j].bucket===pending[i].bucket && Math.abs(g[g.length-1].t-pending[j].t)<=SERIES_GAP){ g.push(pending[j]); j++; }
-    out.push(g.length>1? {type:'series',items:g,sel:new Set()} : {type:'photo',item:g[0]});
-    i=j;
+  const p=raw.filter(i=>i.verdict==null); const out=[]; let i=0;
+  while(i<p.length){
+    const g=[p[i]]; let j=i+1;
+    while(j<p.length && p[j].bucket===p[i].bucket && Math.abs(g[g.length-1].t-p[j].t)<=SERIES_GAP){ g.push(p[j]); j++; }
+    out.push(g.length>1? {type:'series',items:g,sel:new Set()} : {type:'photo',item:g[0]}); i=j;
   }
   queue=out;
 }
+async function ensureAccess(){
+  let p=await Gallery.checkAccess(); if(!p.granted) p=await Gallery.requestAccess();
+  if(!p.granted){ toast('בלי גישה לגלריה אין מה לנקות'); return false; }
+  try{ caps=await Gallery.capabilities(); }catch{}
+  return true;
+}
 async function start(){
-  if(native){
-    let p=await Gallery.checkAccess();
-    if(!p.granted) p=await Gallery.requestAccess();
-    if(!p.granted){ toast('בלי גישה לגלריה אין מה לנקות'); return; }
-    raw=[]; queue=[]; offset=0; reviewed=0;
-    await loadBuckets(); await loadMore();
-    if(!queue.length){ toast('לא נמצאו תמונות'); return; }
-    show('stage'); render();
-  } else { $('files').click(); }
+  if(!native){ $('files').click(); return; }
+  if(!await ensureAccess()) return;
+  mode='gallery'; phase=1; phaseTotal=0; raw=[]; queue=[]; offset=0; total=0; reviewed=0; history=[];
+  await loadBuckets(); await loadMore();
+  if(!queue.length && !hasMore()){ toast('אין תמונות חדשות לסקירה'); return; }
+  show('stage'); render();
+}
+async function openVault(){
+  if(!native){ toast('זמין רק באפליקציה'); return; }
+  if(!await ensureAccess()) return;
+  const ids=Object.keys(kept); if(!ids.length){ toast('עדיין אין תמונות שמורות'); return; }
+  mode='vault'; raw=[]; queue=[]; reviewed=0; history=[]; total=ids.length; offset=total;
+  for(let i=0;i<ids.length;i+=200){ try{ const r=await Gallery.listPhotos({ids:ids.slice(i,i+200),limit:200}); r.items.forEach(it=>raw.push({...it,src:Cap.convertFileSrc(it.uri),t:it.dateTaken||it.dateAdded})); }catch(e){ toast('שגיאה: '+(e.message||e)); } }
+  // forget kept ids that no longer exist on the device
+  const alive=new Set(raw.map(i=>i.id)); ids.forEach(id=>{ if(!alive.has(id)) delete kept[id]; }); saveKept();
+  rebuildQueue(); $('bucket').hidden=true; show('stage'); render();
 }
 async function loadBuckets(){
-  try{
-    const r=await Gallery.listBuckets(); const sel=$('bucket');
+  try{ const r=await Gallery.listBuckets(); const sel=$('bucket');
     sel.innerHTML='<option value="">כל התמונות</option>'+r.buckets.map(b=>`<option value="${esc(b.name)}">${esc(b.name||'(ללא אלבום)')} · ${b.count}</option>`).join('');
-    sel.value=bucket; sel.hidden=false;
-  }catch{}
+    sel.value=bucket; sel.hidden=false; }catch{}
 }
-$('bucket').onchange=async e=>{ bucket=e.target.value; raw=[]; queue=[]; offset=0; reviewed=0; await loadMore(); render(); };
+$('bucket').onchange=async e=>{ bucket=e.target.value; raw=[]; queue=[]; offset=0; total=0; phase=1; phaseTotal=0; reviewed=0; await loadMore(); render(); };
 $('files').onchange=e=>{
   const list=[...e.target.files].filter(f=>f.type.startsWith('image/')); if(!list.length) return;
-  raw=list.map((f,i)=>({id:'w'+i+'-'+f.name,name:f.name,size:f.size,t:f.lastModified,bucket:'',src:URL.createObjectURL(f)}))
-    .sort((a,b)=>b.t-a.t);
-  total=raw.length; reviewed=0; rebuildQueue(); show('stage'); render();
+  mode='gallery'; raw=list.map((f,i)=>({id:'w'+i+'-'+f.name,name:f.name,size:f.size,t:f.lastModified,bucket:'',src:URL.createObjectURL(f)})).sort((a,b)=>b.t-a.t);
+  total=raw.length; offset=total; reviewed=0; rebuildQueue(); show('stage'); render();
 };
 if(!native) $('webNote').hidden=false;
-$('startBtn').onclick=start;
+$('startBtn').onclick=start; $('vaultBtn').onclick=openVault; $('vaultIcon').onclick=openVault;
+$('homeBtn').onclick=()=>{ history=[]; show('start'); };
+$('trashBtn0').onclick=openDrawer;
 
 // ---------- rendering ----------
 function show(w){
-  $('start').hidden=w!=='start';
+  $('start').hidden=w!=='start'; if(w==='start') refreshHome();
   stage.hidden=$('top').hidden=$('barWrap').hidden=w!=='stage';
   if(w!=='stage'){ $('actions').hidden=$('seriesActions').hidden=true; }
   $('done').hidden=w!=='done';
 }
 function render(){
-  const all=native? total : raw.length;
-  $('count').textContent=all? `${reviewed} / ${all}`:'';
-  $('prog').style.width=all? (reviewed/all*100)+'%':'0';
-  $('badge').hidden=!trash.length; $('badge').textContent=trash.length;
-  if(!queue.length){ if(native && offset<total){ loadMore().then(render); return; } finish(); return; }
-  if(native && queue.length<6 && offset<total) loadMore();
+  const all=total||raw.length;
+  $('count').textContent=(mode==='vault'?'★ ':'')+(all? `${reviewed} / ${all}`:'');
+  $('prog').style.width=all? (Math.min(reviewed,all)/all*100)+'%':'0';
+  const pn=Object.keys(pending).length; $('badge').hidden=!pn; $('badge').textContent=pn;
+  if(!queue.length){ if(hasMore()){ loadMore().then(render); return; } finish(); return; }
+  if(hasMore() && queue.length<6) loadMore();
   stage.innerHTML='';
   if(queue[1]) stage.appendChild(card(queue[1],false));
   stage.appendChild(card(queue[0],true));
-  const s=queue[0].type==='series';
-  $('actions').hidden=s; $('seriesActions').hidden=!s;
-  if(s) updateSeriesButtons();
+  const s=queue[0].type==='series'; $('actions').hidden=s; $('seriesActions').hidden=!s; if(s) updateSeriesButtons();
 }
 function card(entry,top){
   const c=document.createElement('div');
   if(entry.type==='photo'){
     const it=entry.item, d=it.t? new Date(it.t).toLocaleDateString('he-IL'):'';
     c.className='card';
-    c.innerHTML=`<img class="full" src="${it.src}" alt=""><div class="meta">${esc(it.name||'')} · ${fmt(it.size)} · ${d}</div>
-      <span class="stamp keep">שמור</span><span class="stamp trash">לפח</span>`;
+    c.innerHTML=`<img class="full" src="${it.src}" alt=""><div class="meta">${esc(it.name||'')} · ${fmt(it.size)} · ${d}</div><span class="stamp keep">שמור</span><span class="stamp trash">לפח</span>`;
   } else {
     const g=entry.items, d=new Date(g[0].t).toLocaleString('he-IL',{dateStyle:'short',timeStyle:'short'});
     c.className='card series';
     c.innerHTML=`<div class="head"><b>סדרה של ${g.length} תמונות</b><span>${d} · ${fmt(sum(g))} · הקש לסימון שמירה, לחיצה ארוכה להגדלה</span></div>
-      <div class="grid">${g.map((it,i)=>`<div data-i="${i}" class="${entry.sel.has(it)?'on':''}"><img src="${it.src}" alt="" loading="lazy"><span class="chk">${entry.sel.has(it)?'✓':''}</span></div>`).join('')}</div>
+      <div class="grid">${g.map((it,i)=>`<div data-i="${i}"><img src="${it.src}" alt="" loading="lazy"><span class="chk"></span></div>`).join('')}</div>
       <span class="stamp keep">שמור הכל</span><span class="stamp trash">מחק הכל</span>`;
     if(top) c.querySelectorAll('.grid div').forEach(tile=>{
       let timer=null, moved=false, sx=0, sy=0;
       tile.onpointerdown=e=>{ moved=false; sx=e.clientX; sy=e.clientY; timer=setTimeout(()=>{ timer=null; openPreview(g[+tile.dataset.i].src); },380); };
       tile.onpointermove=e=>{ if(Math.hypot(e.clientX-sx,e.clientY-sy)>10){ moved=true; clearTimeout(timer); timer=null; } };
-      tile.onpointerup=tile.onpointercancel=e=>{
-        if(timer){ clearTimeout(timer); timer=null; if(!moved){ const it=g[+tile.dataset.i]; entry.sel.has(it)? entry.sel.delete(it): entry.sel.add(it);
-          tile.classList.toggle('on'); tile.querySelector('.chk').textContent=entry.sel.has(it)?'✓':''; updateSeriesButtons(); } }
-        closePreview();
-      };
+      tile.onpointerup=tile.onpointercancel=()=>{ if(timer){ clearTimeout(timer); timer=null; if(!moved){ const it=g[+tile.dataset.i]; entry.sel.has(it)? entry.sel.delete(it): entry.sel.add(it);
+          tile.classList.toggle('on'); tile.querySelector('.chk').textContent=entry.sel.has(it)?'✓':''; updateSeriesButtons(); } } closePreview(); };
     });
   }
   if(!top){ c.classList.add('under'); return c; }
-  // swipe
   let sx=0,sy=0,dx=0,drag=false,horizontal=null;
   const sk=c.querySelector('.stamp.keep'), st=c.querySelector('.stamp.trash');
   c.addEventListener('pointerdown',e=>{drag=true;horizontal=null;sx=e.clientX;sy=e.clientY;c.classList.remove('anim')});
   c.addEventListener('pointermove',e=>{ if(!drag)return; dx=e.clientX-sx; const dy=e.clientY-sy;
     if(horizontal===null && (Math.abs(dx)>8||Math.abs(dy)>8)) horizontal=Math.abs(dx)>Math.abs(dy);
-    if(!horizontal) return;
-    try{c.setPointerCapture(e.pointerId)}catch{}
-    c.style.transform=`translate(${dx}px,${dy*.25}px) rotate(${dx/22}deg)`;
-    sk.style.opacity=clamp(dx/90); st.style.opacity=clamp(-dx/90); });
-  const end=()=>{ if(!drag)return; drag=false;
-    const th=Math.min(120,window.innerWidth*.3);
+    if(!horizontal) return; try{c.setPointerCapture(e.pointerId)}catch{}
+    c.style.transform=`translate(${dx}px,${dy*.25}px) rotate(${dx/22}deg)`; sk.style.opacity=clamp(dx/90); st.style.opacity=clamp(-dx/90); });
+  const end=()=>{ if(!drag)return; drag=false; const th=Math.min(120,window.innerWidth*.3);
     if(horizontal && dx>th) decide('keep'); else if(horizontal && dx<-th) decide('trash');
     else { c.classList.add('anim'); c.style.transform=''; sk.style.opacity=st.style.opacity=0; } dx=0; };
   c.addEventListener('pointerup',end); c.addEventListener('pointercancel',end);
   return c;
 }
-function updateSeriesButtons(){
-  const e=queue[0]; if(!e||e.type!=='series') return;
-  const n=e.sel.size; $('sKeepSel').textContent=n? `שמור ${n} מסומנות` : 'שמור מסומנות'; $('sKeepSel').disabled=!n;
-}
+function updateSeriesButtons(){ const e=queue[0]; if(!e||e.type!=='series') return; const n=e.sel.size; $('sKeepSel').textContent=n? `שמור ${n} מסומנות`:'שמור מסומנות'; $('sKeepSel').disabled=!n; }
 function openPreview(src){ $('previewImg').src=src; $('preview').hidden=false; }
 function closePreview(){ $('preview').hidden=true; }
 $('preview').onpointerup=closePreview;
@@ -286,7 +320,10 @@ function decide(v, selection){
   const entry=queue.shift(); if(!entry) return;
   const items=entry.type==='photo'? [entry.item] : entry.items;
   const rec={items:[],verdicts:[]};
-  items.forEach(it=>{ let vv=v; if(v==='sel') vv=selection.has(it)?'keep':'trash'; it.verdict=vv; rec.items.push(it); rec.verdicts.push(vv); if(vv==='trash') trash.push(it); });
+  items.forEach(it=>{ let vv=v; if(v==='sel') vv=selection.has(it)?'keep':'trash'; it.verdict=vv; rec.items.push(it); rec.verdicts.push(vv);
+    if(vv==='trash'){ delete kept[it.id]; pending[it.id]={t:Date.now(),size:it.size,name:it.name,uri:it.uri}; }
+    else { kept[it.id]=Date.now(); } });
+  saveKept(); savePending();
   reviewed+=items.length; history.push(rec);
   if(navigator.vibrate) navigator.vibrate(v==='trash'?25:10);
   const top=stage.lastElementChild, right=v!=='trash';
@@ -294,54 +331,67 @@ function decide(v, selection){
   setTimeout(render,230);
 }
 function undo(){ const h=history.pop(); if(!h){toast('אין מה לבטל');return;}
-  h.items.forEach(it=>{ it.verdict=null; }); trash=trash.filter(t=>!h.items.includes(t)); reviewed-=h.items.length;
-  rebuildQueue(); show('stage'); render(); }
+  h.items.forEach((it,i)=>{ it.verdict=null; if(h.verdicts[i]==='trash') delete pending[it.id]; else if(mode!=='vault') delete kept[it.id]; else kept[it.id]=Date.now(); });
+  saveKept(); savePending(); reviewed-=h.items.length; rebuildQueue(); show('stage'); render(); }
 $('btnKeep').onclick=()=>decide('keep'); $('btnTrash').onclick=()=>decide('trash'); $('btnUndo').onclick=undo;
 $('sKeepAll').onclick=()=>decide('keep'); $('sTrashAll').onclick=()=>decide('trash');
 $('sKeepSel').onclick=()=>{ const e=queue[0]; if(e&&e.sel.size) decide('sel',e.sel); };
-document.addEventListener('keydown',e=>{ if(stage.hidden)return;
-  if(e.key==='ArrowRight')decide('keep'); else if(e.key==='ArrowLeft')decide('trash'); else if(e.key==='Backspace'||e.key==='z')undo(); });
+document.addEventListener('keydown',e=>{ if(stage.hidden)return; if(e.key==='ArrowRight')decide('keep'); else if(e.key==='ArrowLeft')decide('trash'); else if(e.key==='Backspace'||e.key==='z')undo(); });
 
 function finish(){
-  show('done'); $('doneN').textContent=reviewed;
-  $('doneMsg').textContent=trash.length? `${trash.length} תמונות בפח (${fmt(sum(trash))}). הן עדיין בטלפון עד שתאשר.` : 'הפח ריק. הגלריה נקייה.';
-  $('doneTrash').hidden=!trash.length;
+  show('done'); $('doneN').textContent=reviewed; const pn=Object.keys(pending).length;
+  $('doneMsg').textContent= mode==='vault'? 'סיימת לעבור על השמורות.' : pn? `${pn} תמונות ממתינות לפח (${fmt(pendingBytes())}). לחיצה אחת מעבירה אותן לפח המערכת, ומשם הן נמחקות לבד אחרי 30 יום.` : 'אין תמונות ממתינות. הגלריה נקייה.';
+  $('doneTrash').hidden=!pn;
 }
 $('doneAgain').onclick=()=>{ history=[]; show('start'); };
-$('doneTrash').onclick=openDrawer;
+$('doneTrash').onclick=flushPending;
 
 // ---------- trash drawer ----------
+function pendingBytes(){ return Object.values(pending).reduce((s,p)=>s+(p.size||0),0); }
 function openDrawer(){ renderTrash(); $('drawer').classList.add('open'); $('scrim').classList.add('show'); }
 function closeDrawer(){ $('drawer').classList.remove('open'); $('scrim').classList.remove('show'); }
 $('btnOpenTrash').onclick=openDrawer; $('closeDrawer').onclick=closeDrawer; $('scrim').onclick=closeDrawer;
-function renderTrash(){
-  $('trashN').textContent=trash.length; $('trashMB').textContent=fmt(sum(trash));
-  $('trashGrid').innerHTML=trash.map((t,i)=>`<div><img src="${t.src}" alt="" loading="lazy"><button data-i="${i}" aria-label="החזר">↶</button></div>`).join('');
-  $('trashGrid').querySelectorAll('button').forEach(b=>b.onclick=()=>{ const t=trash.splice(+b.dataset.i,1)[0]; t.verdict=null; reviewed--; rebuildQueue(); renderTrash(); if(!stage.hidden) render(); });
-  $('emptyBtn').disabled=!trash.length;
+function ask(msg){ return new Promise(res=>{ $('confirmMsg').textContent=msg; $('confirm').hidden=false;
+  $('confirmYes').onclick=()=>{ $('confirm').hidden=true; res(true); }; $('confirmNo').onclick=()=>{ $('confirm').hidden=true; res(false); }; }); }
+async function renderTrash(){
+  const ids=Object.keys(pending);
+  $('trashN').textContent=ids.length; $('trashMB').textContent=fmt(pendingBytes());
+  $('trashGrid').innerHTML=ids.map(id=>`<div><img src="${native? Cap.convertFileSrc(pending[id].uri): (raw.find(r=>r.id===id)||{}).src||''}" alt="" loading="lazy"><button data-id="${id}" aria-label="החזר">↶</button></div>`).join('')||'<div style="aspect-ratio:auto;background:none;color:var(--muted);font-size:.85rem;grid-column:1/-1">הפח ריק</div>';
+  $('trashGrid').querySelectorAll('button').forEach(b=>b.onclick=async()=>{ if(!await ask('להחזיר את התמונה לגלריה?')) return; restoreOne(b.dataset.id); renderTrash(); });
+  $('emptyBtn').disabled=!ids.length; $('restoreAll').disabled=!ids.length;
+  // system trash
+  if(native && caps.systemTrash){
+    try{ const r=await Gallery.listPhotos({trashed:true,limit:500}); $('sysH').hidden=$('sysGrid').hidden=false; $('sysN').textContent=r.total;
+      $('sysGrid').innerHTML=r.items.map(it=>{ const days=it.expires? Math.max(0,Math.ceil((it.expires-Date.now())/864e5)):''; return `<div><img src="${Cap.convertFileSrc(it.uri)}" alt="" loading="lazy"><button data-id="${it.id}" aria-label="שחזר">↶</button><span class="exp">${days!==''? days+' ימים':''}</span></div>`; }).join('')||'<div style="aspect-ratio:auto;background:none;color:var(--muted);font-size:.85rem;grid-column:1/-1">פח המערכת ריק</div>';
+      $('sysGrid').querySelectorAll('button').forEach(b=>b.onclick=async()=>{ if(!await ask('לשחזר את התמונה מפח המערכת לגלריה?')) return;
+        try{ const res=await Gallery.restorePhotos({ids:[b.dataset.id]}); if(res.confirmed!==false){ toast('שוחזרה לגלריה'); delete kept[b.dataset.id]; saveKept(); } }catch(e){ toast('השחזור נכשל: '+(e.message||e)); } renderTrash(); });
+    }catch(e){ $('sysH').hidden=$('sysGrid').hidden=true; }
+  }
 }
-$('restoreAll').onclick=()=>{ trash.forEach(t=>t.verdict=null); reviewed-=trash.length; trash=[]; rebuildQueue(); renderTrash(); closeDrawer(); show('stage'); render(); };
-$('emptyBtn').onclick=async()=>{
-  if(!trash.length) return;
-  if(!native){ toast('בדפדפן אי אפשר למחוק קבצים מהמכשיר'); return; }
-  $('emptyBtn').disabled=true;
+function restoreOne(id){ delete pending[id]; savePending(); const it=raw.find(r=>r.id===id); if(it){ it.verdict=null; reviewed--; rebuildQueue(); if(!stage.hidden) render(); } refreshHome(); }
+$('restoreAll').onclick=async()=>{ if(!await ask(`להחזיר את כל ${Object.keys(pending).length} התמונות לגלריה?`)) return; Object.keys(pending).forEach(restoreOne); renderTrash(); };
+async function flushPending(){
+  const ids=Object.keys(pending); if(!ids.length) return;
+  if(!native){ toast('בדפדפן אי אפשר למחוק מהמכשיר'); return; }
+  const bytes=pendingBytes();
   try{
-    const bytes=sum(trash);
-    const r=await Gallery.deletePhotos({ids:trash.map(t=>t.id)});
-    if(r.confirmed===false){ toast('המחיקה בוטלה'); }
-    else { freedBytes+=bytes; store.set('freedBytes',freedBytes); $('freed').textContent=fmt(freedBytes);
-      toast(`נמחקו ${trash.length} תמונות · ${fmt(bytes)}`); raw=raw.filter(i=>!trash.includes(i)); trash=[]; history=[]; }
-  }catch(e){ toast('המחיקה נכשלה: '+(e.message||e)); }
-  renderTrash(); closeDrawer();
-  if(!$('done').hidden) finish(); else render();
-};
+    const r= caps.systemTrash? await Gallery.trashPhotos({ids}) : await Gallery.deletePhotos({ids});
+    if(r.confirmed===false){ toast('בוטל'); return; }
+    freedBytes+=bytes; store.set('freedBytes',freedBytes); ids.forEach(id=>delete pending[id]); savePending();
+    raw=raw.filter(i=>!ids.includes(i.id)); history=[];
+    toast(caps.systemTrash? `${ids.length} תמונות הועברו לפח המערכת · ${fmt(bytes)}` : `נמחקו ${ids.length} תמונות · ${fmt(bytes)}`);
+  }catch(e){ toast('נכשל: '+(e.message||e)); }
+  renderTrash(); closeDrawer(); refreshHome();
+  if(!$('done').hidden) finish(); else if(!stage.hidden) render();
+}
+$('emptyBtn').onclick=flushPending;
 
 // ---------- helpers ----------
 function sum(a){return a.reduce((s,i)=>s+(i.size||0),0)}
 function clamp(x){return Math.min(1,Math.max(0,x))}
 function fmt(b){ return b>=1e9? (b/1e9).toFixed(2)+' GB' : b>=1e6? (b/1e6).toFixed(1)+' MB' : Math.round(b/1e3)+' KB'; }
 function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2000); }
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2200); }
 </script>
 </body>
 </html>
