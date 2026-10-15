@@ -1,0 +1,15 @@
+{
+  "name": "photo-sweeper",
+  "version": "1.0.0",
+  "description": "Swipe to keep or delete photos from your gallery",
+  "private": true,
+  "scripts": {
+    "sync": "cap sync android",
+    "open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/cli": "^6.1.2",
+    "@capacitor/core": "^6.1.2"
+  }
+}
