@@ -38,7 +38,7 @@ import java.util.List;
 @CapacitorPlugin(
     name = "Gallery",
     permissions = {
-        @Permission(alias = "photos", strings = { Manifest.permission.READ_MEDIA_IMAGES }),
+        @Permission(alias = "photos", strings = { Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO }),
         @Permission(alias = "storage", strings = {
             Manifest.permission.READ_EXTERNAL_STORAGE,
             Manifest.permission.WRITE_EXTERNAL_STORAGE
@@ -60,14 +60,19 @@ public class GalleryPlugin extends Plugin {
             });
     }
 
+    private static Uri collectionFor(String kind) {
+        return "video".equals(kind) ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI : MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+    }
+    private static Uri collectionForCall(PluginCall call) { return collectionFor(call.getString("kind", "image")); }
+
     private String alias() {
         return Build.VERSION.SDK_INT >= 33 ? "photos" : "storage";
     }
 
     private boolean hasAccess() {
         if (Build.VERSION.SDK_INT >= 33) {
-            return ContextCompat.checkSelfPermission(getContext(), Manifest.permission.READ_MEDIA_IMAGES)
-                == PackageManager.PERMISSION_GRANTED;
+            return ContextCompat.checkSelfPermission(getContext(), Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
+                && ContextCompat.checkSelfPermission(getContext(), Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED;
         }
         return ContextCompat.checkSelfPermission(getContext(), Manifest.permission.READ_EXTERNAL_STORAGE)
             == PackageManager.PERMISSION_GRANTED;
@@ -98,9 +103,10 @@ public class GalleryPlugin extends Plugin {
         int offset = call.getInt("offset", 0);
         int limit = call.getInt("limit", 50);
         String bucket = call.getString("bucket");
+        String kind = call.getString("kind", "image");
 
         ContentResolver cr = getContext().getContentResolver();
-        Uri collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+        Uri collection = collectionFor(kind);
         String[] proj = {
             MediaStore.Images.Media._ID,
             MediaStore.Images.Media.DISPLAY_NAME,
@@ -111,10 +117,14 @@ public class GalleryPlugin extends Plugin {
             MediaStore.Images.Media.HEIGHT,
             MediaStore.Images.Media.BUCKET_DISPLAY_NAME,
             MediaStore.Images.Media.MIME_TYPE,
-            Build.VERSION.SDK_INT >= 30 ? MediaStore.Images.Media.DATE_EXPIRES : MediaStore.Images.Media.MIME_TYPE
+            Build.VERSION.SDK_INT >= 30 ? MediaStore.Images.Media.DATE_EXPIRES : MediaStore.Images.Media.MIME_TYPE,
+            "video".equals(kind) ? MediaStore.Video.Media.DURATION : MediaStore.Images.Media.SIZE
         };
         List<String> conds = new ArrayList<>(); List<String> argl = new ArrayList<>();
         if (bucket != null && !bucket.isEmpty()) { conds.add(MediaStore.Images.Media.BUCKET_DISPLAY_NAME + " = ?"); argl.add(bucket); }
+        if ("screenshot".equals(kind)) {
+            conds.add("(" + MediaStore.Images.Media.BUCKET_DISPLAY_NAME + " LIKE '%Screenshot%' OR " + MediaStore.Images.Media.DISPLAY_NAME + " LIKE 'Screenshot%' OR " + MediaStore.Images.Media.DISPLAY_NAME + " LIKE 'screenshot%')");
+        }
         Long minAdded = call.getLong("minAdded"); // ms
         Long maxAdded = call.getLong("maxAdded"); // ms
         if (minAdded != null) { conds.add(MediaStore.Images.Media.DATE_ADDED + " >= ?"); argl.add(String.valueOf(minAdded / 1000L)); }
@@ -164,6 +174,7 @@ public class GalleryPlugin extends Plugin {
                         o.put("bucket", c.getString(7));
                         o.put("mime", c.getString(8));
                         if (Build.VERSION.SDK_INT >= 30) o.put("expires", c.getLong(9) * 1000L);
+                        if ("video".equals(kind)) o.put("duration", c.getLong(10));
                         items.put(o);
                         n++;
                     } while (n < limit && c.moveToNext());
@@ -207,14 +218,18 @@ public class GalleryPlugin extends Plugin {
         int size = call.getInt("size", 360);
         if (ids == null) { call.reject("NO_IDS"); return; }
         ContentResolver cr = getContext().getContentResolver();
+        Uri coll = collectionForCall(call);
+        boolean isVideo = "video".equals(call.getString("kind", "image"));
         JSObject thumbs = new JSObject();
         for (int i = 0; i < ids.length(); i++) {
             try {
                 long id = Long.parseLong(ids.getString(i));
-                Uri uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
+                Uri uri = ContentUris.withAppendedId(coll, id);
                 android.graphics.Bitmap bmp;
                 if (Build.VERSION.SDK_INT >= 29) {
                     bmp = cr.loadThumbnail(uri, new android.util.Size(size, size), null);
+                } else if (isVideo) {
+                    bmp = MediaStore.Video.Thumbnails.getThumbnail(cr, id, MediaStore.Video.Thumbnails.MINI_KIND, null);
                 } else {
                     bmp = MediaStore.Images.Thumbnails.getThumbnail(cr, id, MediaStore.Images.Thumbnails.MINI_KIND, null);
                 }
@@ -226,6 +241,30 @@ public class GalleryPlugin extends Plugin {
             } catch (Exception ignored) {}
         }
         JSObject r = new JSObject(); r.put("thumbs", thumbs); call.resolve(r);
+    }
+
+    /** monthStats({ kind }) -> { months: [{ym:"2024-03", count, bytes}] } newest first */
+    @PluginMethod
+    public void monthStats(PluginCall call) {
+        if (!hasAccess()) { call.reject("NO_PERMISSION"); return; }
+        String kind = call.getString("kind", "image");
+        ContentResolver cr = getContext().getContentResolver();
+        String[] proj = { MediaStore.Images.Media.DATE_TAKEN, MediaStore.Images.Media.DATE_ADDED, MediaStore.Images.Media.SIZE };
+        java.util.Map<String, long[]> m = new java.util.TreeMap<>(java.util.Collections.reverseOrder());
+        java.text.SimpleDateFormat f = new java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.US);
+        try (Cursor c = cr.query(collectionFor(kind), proj, null, null, null)) {
+            while (c != null && c.moveToNext()) {
+                long t = c.getLong(0); if (t <= 0) t = c.getLong(1) * 1000L;
+                String ym = f.format(new java.util.Date(t));
+                long[] v = m.get(ym); if (v == null) { v = new long[2]; m.put(ym, v); }
+                v[0]++; v[1] += c.getLong(2);
+            }
+        } catch (Exception e) { call.reject("QUERY_FAILED: " + e.getMessage()); return; }
+        JSArray arr = new JSArray();
+        for (java.util.Map.Entry<String, long[]> e : m.entrySet()) {
+            JSObject o = new JSObject(); o.put("ym", e.getKey()); o.put("count", e.getValue()[0]); o.put("bytes", e.getValue()[1]); arr.put(o);
+        }
+        JSObject r = new JSObject(); r.put("months", arr); call.resolve(r);
     }
 
     /** capabilities() -> { systemTrash: bool } */
@@ -248,8 +287,9 @@ public class GalleryPlugin extends Plugin {
         if (ids == null || ids.length() == 0) { call.reject("NO_IDS"); return; }
         List<Uri> uris = new ArrayList<>();
         try {
+            Uri coll = collectionForCall(call);
             for (int i = 0; i < ids.length(); i++)
-                uris.add(ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, Long.parseLong(ids.getString(i))));
+                uris.add(ContentUris.withAppendedId(coll, Long.parseLong(ids.getString(i))));
         } catch (JSONException e) { call.reject("BAD_IDS"); return; }
         PendingIntent pi = MediaStore.createTrashRequest(getContext().getContentResolver(), uris, toTrash);
         call.setKeepAlive(true);
@@ -263,9 +303,9 @@ public class GalleryPlugin extends Plugin {
         if (ids == null || ids.length() == 0) { call.reject("NO_IDS"); return; }
         List<Uri> uris = new ArrayList<>();
         try {
+            Uri coll = collectionForCall(call);
             for (int i = 0; i < ids.length(); i++) {
-                uris.add(ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    Long.parseLong(ids.getString(i))));
+                uris.add(ContentUris.withAppendedId(coll, Long.parseLong(ids.getString(i))));
             }
         } catch (JSONException e) { call.reject("BAD_IDS"); return; }
 
