@@ -1,6 +1,6 @@
 {
   "appId": "com.pinchosku.photosweeper",
-  "appName": "Photo Sweeper",
+  "appName": "Swipely",
   "webDir": "www",
   "android": { "allowMixedContent": false }
 }
