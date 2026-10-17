@@ -16,10 +16,14 @@
   --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
   color-scheme:dark;
 }
+:root[data-skin="neon"]{--coral:#00f5d4;--peach:#9b5de5;--grad:linear-gradient(135deg,#00f5d4,#9b5de5);--bg:#06041a;--bg2:#0e0a2a;--surface:#15103a;--line:#2a2360;--keep:#00f5d4;--trash:#f15bb5}
+:root[data-skin="sunset"]{--coral:#ff6b35;--peach:#ffd166;--grad:linear-gradient(135deg,#ff6b35,#ffd166);--bg:#1a0b06;--bg2:#2a140a;--surface:#33180c;--line:#4d2a17;--keep:#06d6a0;--trash:#ef476f}
+:root[data-skin="mint"]{--coral:#2ec4b6;--peach:#cbf3f0;--grad:linear-gradient(135deg,#2ec4b6,#cbf3f0);--bg:#051412;--bg2:#0a221e;--surface:#0f2e29;--line:#1c4a42;--keep:#80ed99;--trash:#ff6b6b}
+:root[data-skin="gold"]{--coral:#f7b733;--peach:#fc4a1a;--grad:linear-gradient(135deg,#f7b733,#fc4a1a);--bg:#0f0b03;--bg2:#1c1406;--surface:#241a08;--line:#45330f;--keep:#a3e635;--trash:#fb7185}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%;margin:0}
-body{background:radial-gradient(120% 80% at 50% -10%,#3a1f3d 0%,var(--bg) 60%);color:var(--fg);font-family:var(--font);overflow:hidden;position:relative}
+body{background:radial-gradient(120% 80% at 50% -10%,color-mix(in srgb,var(--coral) 22%,var(--bg)) 0%,var(--bg) 60%);color:var(--fg);font-family:var(--font);overflow:hidden;position:relative}
 button{font-family:inherit;font-weight:700;border:0;border-radius:999px;cursor:pointer;font-size:1rem;color:var(--fg);-webkit-tap-highlight-color:transparent;transition:transform .12s}
 button:active{transform:scale(.94)}
 button:focus-visible{outline:3px solid var(--peach);outline-offset:3px}
@@ -32,6 +36,7 @@ button:disabled{opacity:.4}
 .logo .mark{width:92px;height:92px;position:relative;margin-bottom:6px}
 .logo .mark i{position:absolute;inset:0;border-radius:22px;background:var(--grad);box-shadow:0 14px 40px rgba(255,95,109,.45)}
 .logo .mark i:nth-child(1){transform:rotate(-14deg) translate(-10px,2px);opacity:.45}
+.logo .mark{cursor:pointer}
 .logo .mark i:nth-child(2){transform:rotate(8deg) translate(8px,0);opacity:.7}
 .logo .mark i:nth-child(3){transform:none;display:grid;place-items:center;font-size:2.4rem;color:#fff}
 .logo h1{font-size:2.3rem;font-weight:900;margin:0;letter-spacing:-.02em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
@@ -144,6 +149,23 @@ select{font:inherit;font-size:.85rem;background:rgba(0,0,0,.45);color:#fff;borde
 .level .lh span{color:var(--muted);font-variant-numeric:tabular-nums}
 .level .lb{height:8px;border-radius:4px;background:rgba(255,255,255,.1);margin-top:8px;overflow:hidden}
 .level .lb i{display:block;height:100%;background:var(--grad);width:0;transition:width .4s}
+/* skins sheet */
+.skins{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.skin{border-radius:16px;padding:12px;text-align:right;border:2px solid transparent;background:rgba(255,255,255,.05);color:var(--fg);display:flex;flex-direction:column;gap:6px}
+.skin .sw{height:34px;border-radius:10px}
+.skin b{font-size:.9rem}
+.skin small{color:var(--muted);font-size:.72rem}
+.skin.active{border-color:var(--keep)}
+.skin.locked{opacity:.55}
+/* challenge */
+.chal{width:100%;max-width:380px;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:18px;padding:12px 14px;text-align:right}
+.chal .lh{display:flex;justify-content:space-between;align-items:baseline;font-size:.85rem}
+.chal .lh b{font-size:.95rem}
+.chal .lh span{color:var(--muted);font-variant-numeric:tabular-nums;font-size:.78rem}
+.chal .lb{height:8px;border-radius:4px;background:rgba(255,255,255,.1);margin-top:8px;overflow:hidden}
+.chal .lb i{display:block;height:100%;background:var(--keep);width:0;transition:width .4s}
+.chal.done .lb i{background:var(--grad)}
+.homeicons{position:absolute;top:calc(var(--sat) + 12px);left:14px;display:flex;gap:8px}
 /* calendar */
 .cal{position:absolute;inset:0;z-index:8;background:var(--bg);display:flex;flex-direction:column}
 .cal .chead{padding:calc(var(--sat) + 12px) 16px 10px;display:flex;align-items:center;gap:10px}
@@ -175,7 +197,9 @@ select{font:inherit;font-size:.85rem;background:rgba(0,0,0,.45);color:#fff;borde
     <div class="chip"><b id="keptN">0</b><small>שמורות</small></div>
     <div class="chip"><b id="pendN">0</b><small>בפח</small></div>
   </div>
+  <div class="homeicons"><button class="iconbtn" id="skinsBtn" aria-label="ערכות נושא">🎨</button><button class="iconbtn" id="shareBtn" aria-label="שתף הישג">↗</button></div>
   <div class="level"><div class="lh"><b id="lvlName">מתחיל</b><span id="lvlPts">0 נק׳</span></div><div class="lb"><i id="lvlBar"></i></div></div>
+  <div class="chal" id="chal"><div class="lh"><b id="chalName">אתגר השבוע</b><span id="chalProg"></span></div><div class="lb"><i id="chalBar"></i></div></div>
   <div class="modes">
     <button class="mode primary" id="startBtn"><span class="ic">❤</span><b>בוא נתחיל</b><small>כל התמונות</small></button>
     <button class="mode" id="shotsBtn"><span class="ic">📱</span><b>צילומי מסך</b><small>ניקוי מהיר</small></button>
@@ -192,6 +216,11 @@ select{font:inherit;font-size:.85rem;background:rgba(0,0,0,.45);color:#fff;borde
   <div class="chead"><button class="iconbtn" id="calClose" aria-label="סגור">✕</button><h2>לפי חודש</h2></div>
   <div class="cbody" id="calBody"></div>
 </section>
+<div class="drawer" id="skinsDrawer" style="z-index:31">
+  <h2><span>ערכות נושא</span><button class="small" id="skinsClose" style="width:36px;height:36px">✕</button></h2>
+  <div class="skins" id="skinsGrid"></div>
+</div>
+<canvas id="shareCanvas" width="1080" height="1920" hidden></canvas>
 <div class="check" id="check" hidden><div><span class="big-n" id="ckMB">0 MB</span><p id="ckMsg"></p><span class="pts" id="ckPts"></span><button class="pick" id="ckGo">ממשיכים ❤</button></div></div>
 <section class="stage" id="stage" hidden></section>
 <div class="bar" id="barWrap" hidden><i id="prog"></i></div>
@@ -246,6 +275,8 @@ const Gallery=native? new Proxy({}, {get:(_,method)=>opts=>Cap.nativePromise('Ga
 window.addEventListener('error',e=>{ try{ toast('שגיאה: '+e.message); }catch{} });
 const PAGE=80, SERIES_GAP=60*1000, FRESH_DAYS=3, CHECK_EVERY=30, MB_PER_POINT=10;
 const LEVELS=[[0,'מתחיל'],[500,'סוחב'],[2000,'אדריכל'],[5000,'קוסם'],[15000,'אגדה']];
+const SKINS=[{id:'',name:'קורל',cost:0,g:'linear-gradient(135deg,#ff5f6d,#ffc371)'},{id:'sunset',name:'שקיעה',cost:300,g:'linear-gradient(135deg,#ff6b35,#ffd166)'},{id:'mint',name:'מנטה',cost:800,g:'linear-gradient(135deg,#2ec4b6,#cbf3f0)'},{id:'neon',name:'נאון',cost:1500,g:'linear-gradient(135deg,#00f5d4,#9b5de5)'},{id:'gold',name:'זהב',cost:4000,g:'linear-gradient(135deg,#f7b733,#fc4a1a)'}];
+const CHAL_MB=500; // weekly goal
 let kind='image', monthRange=null, swipesSinceCheck=0;
 let raw=[], queue=[], trash=[], history=[], total=0, offset=0, loading=false, bucket='', reviewed=0;
 let mode='gallery', phase=1, phaseTotal=0, caps={systemTrash:false};
@@ -262,13 +293,21 @@ async function loadThumbs(items){
 const store={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
 let freedBytes=store.get('freedBytes',0);
 let points=store.get('points',0);
+let skin=store.get('skin',''), unlocked=store.get('unlocked',['']);
+let chal=store.get('chal',null); // {week, bytes, done}
+function weekId(){ const d=new Date(); const day=(d.getDay()+1)%7; d.setDate(d.getDate()-day); return d.toISOString().slice(0,10); } // weeks start Sunday
+function ensureChal(){ const w=weekId(); if(!chal||chal.week!==w){ chal={week:w,bytes:0,done:false}; store.set('chal',chal); } }
+function applySkin(){ if(skin) document.documentElement.setAttribute('data-skin',skin); else document.documentElement.removeAttribute('data-skin'); }
+applySkin();
 let kept=store.get('kept',{});        // id -> timestamp kept
 let pending=store.get('pending',{});  // id -> {t,size,name,src?}  photos swiped left, not yet in system trash
 const saveKept=()=>store.set('kept',kept), savePending=()=>store.set('pending',pending);
 function levelFor(p){ let i=0; for(let k=0;k<LEVELS.length;k++) if(p>=LEVELS[k][0]) i=k; return i; }
 function refreshHome(){ $('freed').textContent=fmt(freedBytes); $('keptN').textContent=Object.keys(kept).length; $('pendN').textContent=Object.keys(pending).length;
   const li=levelFor(points), next=LEVELS[li+1]; $('lvlName').textContent=LEVELS[li][1]; $('lvlPts').textContent= next? `${points} / ${next[0]} נק׳` : `${points} נק׳`;
-  $('lvlBar').style.width= next? ((points-LEVELS[li][0])/(next[0]-LEVELS[li][0])*100)+'%' : '100%'; }
+  $('lvlBar').style.width= next? ((points-LEVELS[li][0])/(next[0]-LEVELS[li][0])*100)+'%' : '100%';
+  ensureChal(); const mb=chal.bytes/1e6; $('chalProg').textContent= chal.done? '✓ הושלם · בונוס x2 פעיל' : `${Math.round(mb)} / ${CHAL_MB} MB עד שבת`;
+  $('chalName').textContent= chal.done? 'אתגר השבוע הושלם 🎉' : `אתגר השבוע: נקה ${CHAL_MB} MB`; $('chalBar').style.width=Math.min(100,mb/CHAL_MB*100)+'%'; $('chal').classList.toggle('done',chal.done); }
 refreshHome();
 
 // ---------- loading ----------
@@ -511,12 +550,52 @@ async function flushPending(){
       done+=ks.length; bytes+=b; ks.forEach(k=>delete pending[k]); savePending(); raw=raw.filter(i=>!ks.includes(i.k));
     }catch(e){ toast('נכשל: '+(e.message||e)); }
   }
-  if(done){ freedBytes+=bytes; store.set('freedBytes',freedBytes); const pts=Math.floor(bytes/1e6/MB_PER_POINT); const before=levelFor(points); points+=pts; store.set('points',points); history=[];
-    toast(`${done} קבצים הועברו לפח · ${fmt(bytes)} · +${pts} נק׳`); if(levelFor(points)>before) setTimeout(()=>toast(`🎉 עלית לרמה: ${LEVELS[levelFor(points)][1]}`),2300); }
+  if(done){ freedBytes+=bytes; store.set('freedBytes',freedBytes); ensureChal();
+    let pts=Math.floor(bytes/1e6/MB_PER_POINT); const wasDone=chal.done; chal.bytes+=bytes;
+    if(!chal.done && chal.bytes>=CHAL_MB*1e6){ chal.done=true; pts+=100; }
+    if(wasDone) pts*=2; store.set('chal',chal);
+    const before=levelFor(points); points+=pts; store.set('points',points); history=[];
+    toast(`${done} קבצים הועברו לפח · ${fmt(bytes)} · +${pts} נק׳${wasDone?' (x2)':''}`);
+    if(!wasDone && chal.done) setTimeout(()=>toast('🏆 אתגר השבוע הושלם! +100 נק׳ וכל נקודה כפולה עד שבת'),2300);
+    else if(levelFor(points)>before) setTimeout(()=>toast(`🎉 עלית לרמה: ${LEVELS[levelFor(points)][1]}`),2300); }
   renderTrash(); closeDrawer(); refreshHome();
   if(!$('done').hidden) finish(); else if(!stage.hidden) render();
 }
 $('emptyBtn').onclick=flushPending;
+
+// ---------- skins ----------
+function renderSkins(){
+  $('skinsGrid').innerHTML=SKINS.map(k=>{ const has=unlocked.includes(k.id), on=skin===k.id;
+    return `<button class="skin ${on?'active':''} ${has?'':'locked'}" data-id="${k.id}"><div class="sw" style="background:${k.g}"></div><b>${k.name}</b><small>${on?'פעיל': has?'הקש להפעלה': `🔒 ${k.cost} נק׳`}</small></button>`; }).join('');
+  $('skinsGrid').querySelectorAll('.skin').forEach(b=>b.onclick=async()=>{ const k=SKINS.find(x=>x.id===b.dataset.id);
+    if(!unlocked.includes(k.id)){ if(points<k.cost){ toast(`חסרות ${k.cost-points} נקודות`); return; } if(!await ask(`לפתוח את ערכת "${k.name}" תמורת ${k.cost} נקודות?`)) return; points-=k.cost; store.set('points',points); unlocked.push(k.id); store.set('unlocked',unlocked); toast(`✨ נפתחה ערכת ${k.name}`); }
+    skin=k.id; store.set('skin',skin); applySkin(); renderSkins(); refreshHome(); });
+}
+$('skinsBtn').onclick=()=>{ renderSkins(); $('skinsDrawer').classList.add('open'); $('scrim').classList.add('show'); };
+$('skinsClose').onclick=()=>{ $('skinsDrawer').classList.remove('open'); if(!$('drawer').classList.contains('open')) $('scrim').classList.remove('show'); };
+$('scrim').addEventListener('click',()=>$('skinsDrawer').classList.remove('open'));
+
+// ---------- share card ----------
+function shareCard(){
+  const c=$('shareCanvas'), g=c.getContext('2d'), W=c.width, H=c.height;
+  const cs=getComputedStyle(document.documentElement); const a=cs.getPropertyValue('--coral').trim()||'#ff5f6d', b=cs.getPropertyValue('--peach').trim()||'#ffc371', bg=cs.getPropertyValue('--bg').trim()||'#120c14';
+  g.fillStyle=bg; g.fillRect(0,0,W,H);
+  const rg=g.createRadialGradient(W/2,-200,50,W/2,-200,1400); rg.addColorStop(0,a+'66'); rg.addColorStop(1,'rgba(0,0,0,0)'); g.fillStyle=rg; g.fillRect(0,0,W,H);
+  // card stack
+  const lg=g.createLinearGradient(0,0,W,H); lg.addColorStop(0,a); lg.addColorStop(1,b);
+  const card=(x,y,w,h,rot,alpha)=>{ g.save(); g.translate(x,y); g.rotate(rot); g.globalAlpha=alpha; g.fillStyle=lg; rr(g,-w/2,-h/2,w,h,48); g.fill(); g.restore(); };
+  card(W/2-40,560,420,560,-.22,.45); card(W/2+40,540,420,560,.14,.7); card(W/2,520,420,560,0,1);
+  g.fillStyle='#fff'; g.font='bold 220px system-ui,sans-serif'; g.textAlign='center'; g.fillText('❤',W/2,600);
+  g.direction='rtl'; g.textAlign='center';
+  g.fillStyle='#fff'; g.font='900 150px system-ui,sans-serif'; g.fillText(fmt(freedBytes),W/2,1060);
+  g.fillStyle='rgba(255,255,255,.8)'; g.font='500 56px system-ui,sans-serif'; g.fillText('ניקיתי מהגלריה שלי עם Swipely',W/2,1150);
+  g.fillStyle='#fff'; g.font='900 88px system-ui,sans-serif'; g.fillText(`רמה: ${LEVELS[levelFor(points)][1]}`,W/2,1340);
+  g.fillStyle='rgba(255,255,255,.75)'; g.font='500 54px system-ui,sans-serif'; g.fillText(`${points} נקודות · ${Object.keys(kept).length} תמונות שמורות`,W/2,1430);
+  g.fillStyle=lg; g.font='900 72px system-ui,sans-serif'; g.fillText('Swipely',W/2,1760);
+  return c.toDataURL('image/png');
+}
+function rr(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+$('shareBtn').onclick=async()=>{ const d=shareCard(); if(native){ try{ await Gallery.shareImage({dataUrl:d,text:`ניקיתי ${fmt(freedBytes)} מהגלריה עם Swipely ❤`}); }catch(e){ toast('השיתוף נכשל: '+(e.message||e)); } } else { const w=window.open(); if(w) w.document.write(`<img src="${d}" style="max-width:100%">`); else toast('זמין באפליקציה'); } };
 
 // ---------- helpers ----------
 function sum(a){return a.reduce((s,i)=>s+(i.size||0),0)}

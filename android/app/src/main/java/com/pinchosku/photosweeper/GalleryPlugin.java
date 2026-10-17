@@ -267,6 +267,26 @@ public class GalleryPlugin extends Plugin {
         JSObject r = new JSObject(); r.put("months", arr); call.resolve(r);
     }
 
+    /** shareImage({ dataUrl, text? }) -> opens the system share sheet with a PNG */
+    @PluginMethod
+    public void shareImage(PluginCall call) {
+        String dataUrl = call.getString("dataUrl");
+        if (dataUrl == null || !dataUrl.contains(",")) { call.reject("NO_IMAGE"); return; }
+        try {
+            byte[] bytes = android.util.Base64.decode(dataUrl.substring(dataUrl.indexOf(',') + 1), android.util.Base64.DEFAULT);
+            java.io.File dir = new java.io.File(getContext().getCacheDir(), "share"); dir.mkdirs();
+            java.io.File f = new java.io.File(dir, "swipely-" + System.currentTimeMillis() + ".png");
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) { out.write(bytes); }
+            Uri uri = androidx.core.content.FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", f);
+            android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_SEND);
+            i.setType("image/png"); i.putExtra(android.content.Intent.EXTRA_STREAM, uri);
+            String text = call.getString("text"); if (text != null) i.putExtra(android.content.Intent.EXTRA_TEXT, text);
+            i.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            getActivity().startActivity(android.content.Intent.createChooser(i, "Swipely"));
+            call.resolve();
+        } catch (Exception e) { call.reject("SHARE_FAILED: " + e.getMessage()); }
+    }
+
     /** capabilities() -> { systemTrash: bool } */
     @PluginMethod
     public void capabilities(PluginCall call) {
